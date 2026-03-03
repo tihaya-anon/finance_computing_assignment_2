@@ -1,20 +1,20 @@
 """
-检查期权套利机会
+Option Arbitrage Analysis
 
-非套利条件（考虑 dividend yield q = 20%）:
+Non-arbitrage conditions (considering dividend yield q = 20%):
 1. Put-Call Parity: C - P = S*e^(-qT) - K*e^(-rT)
-2. Call 边界: max(S*e^(-qT) - K*e^(-rT), 0) <= C <= S*e^(-qT)
-3. Put 边界: max(K*e^(-rT) - S*e^(-qT), 0) <= P <= K*e^(-rT)
+2. Call bounds: max(S*e^(-qT) - K*e^(-rT), 0) <= C <= S*e^(-qT)
+3. Put bounds: max(K*e^(-rT) - S*e^(-qT), 0) <= P <= K*e^(-rT)
 
-交易成本:
-- 买入期权: 3.3 RMB/股 * 10000股/合约 = 33000 RMB/合约
-- 卖出期权: 无成本
-- A50ETF: 无成本
+Transaction costs:
+- Buy option: 3.3 RMB/share * 10000 shares/contract = 33000 RMB/contract
+- Sell option: no cost
+- A50ETF: no cost
 
-由于交易成本是固定的，而期权价格很小，
-实际套利检验应该比较:
-- 理论价格边界 vs 实际买入/卖出价格
-- 如果违背幅度 > 交易成本，则有净套利空间
+Since transaction cost is fixed and option prices are small,
+actual arbitrage check compares:
+- Theoretical price bounds vs actual buy/sell prices
+- If violation > transaction cost, there is net arbitrage opportunity
 """
 
 import pandas as pd
@@ -43,13 +43,14 @@ equity_price_df = ins_price_df[ins_price_df["Symbol"] == 510050]
 expiry = pd.Timestamp("2016-02-24")
 r = 0.04
 q = 0.20
-# 每股交易成本 = 3.3 RMB/股 (每张合约 10000 股)
+# Transaction cost per share = 3.3 RMB/share (10000 shares per contract)
 tc_per_share = 3.3
 
 os.makedirs("./result/q4", exist_ok=True)
 
 
 def get_latest_price(df, before):
+    """Get the latest bid/ask price before the given time"""
     filtered = df[df["LocalTime"] < before]
     if not filtered.empty:
         idx = filtered["LocalTime"].idxmax()
@@ -59,22 +60,22 @@ def get_latest_price(df, before):
 
 
 def check_arbitrage(time_before):
-    """检查指定时间的套利机会"""
+    """Check arbitrage opportunities at the specified time"""
     T = (expiry - time_before).days / 365
 
-    # 获取标的资产价格
+    # Get underlying asset price (use mid price)
     equity_bid, equity_ask = get_latest_price(equity_price_df, time_before)
     if equity_bid is None or equity_ask is None:
         return None, None
     S = (equity_bid + equity_ask) / 2
 
-    # 获取所有strike
+    # Get all strikes
     strikes = sorted(instruments[instruments["Type"] == "Option"]["Strike"].unique())
 
     results = []
 
     for strike in strikes:
-        # 获取 Call 价格
+        # Get Call price
         call_row = instruments[
             (instruments["Strike"] == strike) & (instruments["OptionType"] == "C")
         ]
@@ -84,7 +85,7 @@ def check_arbitrage(time_before):
         call_prices = option_price_df[option_price_df["Symbol"] == call_symbol]
         bid_call, ask_call = get_latest_price(call_prices, time_before)
 
-        # 获取 Put 价格
+        # Get Put price
         put_row = instruments[
             (instruments["Strike"] == strike) & (instruments["OptionType"] == "P")
         ]
@@ -97,27 +98,27 @@ def check_arbitrage(time_before):
         if any(x is None for x in [bid_call, ask_call, bid_put, ask_put]):
             continue
 
-        # 理论值
+        # Theoretical values
         discount_factor = np.exp(-r * T)
         dividend_discount = np.exp(-q * T)
 
-        # Call 边界 (每股)
+        # Call bounds (per share)
         call_lower = max(S * dividend_discount - strike * discount_factor, 0)
         call_upper = S * dividend_discount
 
-        # Put 边界 (每股)
+        # Put bounds (per share)
         put_lower = max(strike * discount_factor - S * dividend_discount, 0)
         put_upper = strike * discount_factor
-
+        
         if bid_call is None or bid_put is None or ask_call is None or ask_put is None:
             continue
-        # 无交易成本
+        # Without transaction cost
         call_violate_no_tc = (bid_call < call_lower) or (ask_call > call_upper)
         put_violate_no_tc = (bid_put < put_lower) or (ask_put > put_upper)
 
-        # 有交易成本 - 买入时需加上交易成本
-        # 买入 Call 实际成本 = Ask + tc_per_share
-        # 买入 Put 实际成本 = Ask + tc_per_share
+        # With transaction cost - add cost when buying
+        # Buy Call actual cost = Ask + tc_per_share
+        # Buy Put actual cost = Ask + tc_per_share
         call_violate_with_tc = ((bid_call + tc_per_share) < call_lower) or (
             (ask_call + tc_per_share) > call_upper
         )
@@ -148,11 +149,13 @@ def check_arbitrage(time_before):
     return pd.DataFrame(results), S
 
 
-# 输出结果
+# Output results
 print("=" * 80)
-print("期权套利分析")
+print("Option Arbitrage Analysis")
 print("=" * 80)
-print(f"参数: r = {r*100}%, q = {q*100}%, 每股交易成本 = {tc_per_share} RMB")
+print(
+    f"Parameters: r = {r*100}%, q = {q*100}%, Transaction cost = {tc_per_share} RMB/share"
+)
 print("=" * 80)
 
 for minute in [31, 32, 33]:
@@ -163,15 +166,15 @@ for minute in [31, 32, 33]:
         continue
 
     print(f"\n{'='*60}")
-    print(f"时间: 09:{minute}:00, S = {S:.4f}")
+    print(f"Time: 09:{minute}:00, S = {S:.4f}")
     print(f"{'='*60}")
 
-    # Call 边界违背
+    # Call bound violations
     call_violations_no_tc = df[df["Call_Violate_NoTC"] == True]
     call_violations_with_tc = df[df["Call_Violate_WithTC"] == True]
 
-    print(f"\n【Call 价格边界违背】C <= S*e^(-qT)")
-    print(f"  - 无交易成本: {len(call_violations_no_tc)} 个违背")
+    print(f"\n[Call Price Bound Violation] C <= S*e^(-qT)")
+    print(f"  - No transaction cost: {len(call_violations_no_tc)} violations")
     if len(call_violations_no_tc) > 0:
         for _, row in call_violations_no_tc.iterrows():
             if row["AskCall"] > row["CallUpper"]:
@@ -179,7 +182,7 @@ for minute in [31, 32, 33]:
                     f"    Strike {row['Strike']}: Ask={row['AskCall']:.4f} > Upper={row['CallUpper']:.4f}"
                 )
 
-    print(f"  - 有交易成本: {len(call_violations_with_tc)} 个违背")
+    print(f"  - With transaction cost: {len(call_violations_with_tc)} violations")
     if len(call_violations_with_tc) > 0:
         for _, row in call_violations_with_tc.iterrows():
             if (row["AskCall"] + tc_per_share) > row["CallUpper"]:
@@ -187,21 +190,21 @@ for minute in [31, 32, 33]:
                     f"    Strike {row['Strike']}: Ask+Cost={row['AskCall']+tc_per_share:.4f} > Upper={row['CallUpper']:.4f}"
                 )
 
-    # Put 边界违背
+    # Put bound violations
     put_violations_no_tc = df[df["Put_Violate_NoTC"] == True]
     put_violations_with_tc = df[df["Put_Violate_WithTC"] == True]
 
-    print(f"\n【Put 价格边界违背】P >= K*e^(-rT) - S*e^(-qT)")
-    print(f"  - 无交易成本: {len(put_violations_no_tc)} 个违背")
+    print(f"\n[Put Price Bound Violation] P >= K*e^(-rT) - S*e^(-qT)")
+    print(f"  - No transaction cost: {len(put_violations_no_tc)} violations")
     if len(put_violations_no_tc) > 0:
         for _, row in put_violations_no_tc.iterrows():
             if row["BidPut"] < row["PutLower"]:
                 diff = row["PutLower"] - row["BidPut"]
                 print(
-                    f"    Strike {row['Strike']}: Bid={row['BidPut']:.4f} < Lower={row['PutLower']:.4f} (差={diff:.4f})"
+                    f"    Strike {row['Strike']}: Bid={row['BidPut']:.4f} < Lower={row['PutLower']:.4f} (diff={diff:.4f})"
                 )
 
-    print(f"  - 有交易成本: {len(put_violations_with_tc)} 个违背")
+    print(f"  - With transaction cost: {len(put_violations_with_tc)} violations")
     if len(put_violations_with_tc) > 0:
         for _, row in put_violations_with_tc.iterrows():
             if (row["BidPut"] + tc_per_share) < row["PutLower"]:
@@ -210,25 +213,29 @@ for minute in [31, 32, 33]:
                     f"    Strike {row['Strike']}: Bid+Cost={row['BidPut']+tc_per_share:.4f} < Lower={row['PutLower']:.4f}"
                 )
 
-    # 保存结果
+    # Save results
     df.to_csv(f"./result/q4/{minute}.csv", index=False)
 
 print("\n" + "=" * 80)
-print("结论:")
+print("Conclusion:")
 print("=" * 80)
 print(
     """
-1. 无交易成本情况下:
-   - 如果 Put 的 Bid < Lower，则存在买入套利机会：
-     买入被低估的 Put，持有到期可获得无风险收益
-   - 如果 Put 的 Ask > Upper，则存在卖出套利机会
+1. Without transaction cost:
+   - If Put Bid < Lower, there is a buying arbitrage opportunity:
+     Buy undervalued Put, hold to maturity for risk-free profit
+   - If Put Ask > Upper, there is a selling arbitrage opportunity
 
-2. 有交易成本情况下:
-   - 买入成本 = Bid/Ask + 3.3 RMB/股
-   - 套利空间必须大于交易成本才有实际利润
+2. With transaction cost:
+   - Buy cost = Bid/Ask + 3.3 RMB/share
+   - Arbitrage margin must exceed transaction cost to be profitable
 
-3. 发现的套利机会:
-   - Put 边界违背（Bid < Lower）表示可以买入被低估的 Put
-   - 这种违背在 OTM Put（Strike > S）中常见
+3. Findings:
+   - Put bound violations (Bid < Lower) indicate undervalued Puts
+   - This violation is common in OTM Puts (Strike > S)
+   - In theory, these violations represent arbitrage opportunities
+   - However, the profit margin (0.001~0.066/share) is much smaller than
+     transaction cost (3.3 RMB/share), so no practical arbitrage exists
+     after considering transaction costs
 """
 )
