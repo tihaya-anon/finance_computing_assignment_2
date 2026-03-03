@@ -29,7 +29,7 @@ class ImpliedVolatility:
                 else max(0.0, K - S)
             )
             if abs(option_price - intrinsic) < EPSILON:
-                return 0.0, True
+                return 0.0
             raise ValueError("Option price inconsistent with zero time to maturity.")
 
         # Initial guess (Brenner-Subrahmanyam style; fallback to 0.3)
@@ -47,7 +47,7 @@ class ImpliedVolatility:
             # protect against tiny vega
             if option_vega < EPSILON:
                 # cannot use Newton step safely; return current estimate
-                return sigma_hat, True
+                return sigma_hat
 
             increment = (option_price_hat - option_price) / option_vega
             # limit step size to avoid wild jumps
@@ -57,15 +57,15 @@ class ImpliedVolatility:
             sigma_new = sigma_hat - increment
             # ensure sigma stays positive and reasonable
             if sigma_new < EPSILON:
-                return EPSILON, False
+                return "NaN"
 
             if abs(sigma_new - sigma_hat) < tolerance:
-                return sigma_new, True
+                return sigma_new
 
             sigma_hat = sigma_new
 
         # if not converged, return last estimate (optionally raise)
-        return sigma_hat, True
+        return sigma_hat
 
     @classmethod
     def __vega(cls, S, K, t, T, r, q, sigma):

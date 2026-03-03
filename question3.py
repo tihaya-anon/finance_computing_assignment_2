@@ -71,17 +71,13 @@ for minute in range(31, 34):
         bid_call, ask_call = get_latest_price(
             option_price[option_price["OptionType"] == "C"], time_before
         )
-        bid_vol_call, ok = ImpliedVolatility.call_vol(
+        bid_vol_call = ImpliedVolatility.call_vol(
             bid_call, equity_price, option_call_strike, 16 / 365, 24 / 365, 0.04, 0.20
         )
-        if not ok:
-            bid_vol_call = "NaN"
         ret[option_call_strike]["BidVolC"] = bid_vol_call
-        ask_vol_call, ok = ImpliedVolatility.call_vol(
+        ask_vol_call = ImpliedVolatility.call_vol(
             ask_call, equity_price, option_call_strike, 16 / 365, 24 / 365, 0.04, 0.20
         )
-        if not ok:
-            ask_vol_call = "NaN"
         ret[option_call_strike]["AskVolC"] = ask_vol_call
 
         option_put_strike = option_strike_df[option_strike_df["OptionType"] == "P"][
@@ -90,16 +86,12 @@ for minute in range(31, 34):
         bid_put, ask_put = get_latest_price(
             option_price[option_price["OptionType"] == "P"], time_before
         )
-        bid_vol_put, ok = ImpliedVolatility.put_vol(
+        bid_vol_put = ImpliedVolatility.put_vol(
             bid_put, equity_price, option_put_strike, 16 / 365, 24 / 365, 0.04, 0.20
         )
-        if not ok:
-            bid_vol_put = "NaN"
-        ret[option_put_strike]["BidVolC"] = bid_vol_put
-        ask_vol_put, ok = ImpliedVolatility.put_vol(
+        ret[option_put_strike]["BidVolP"] = bid_vol_put
+        ask_vol_put = ImpliedVolatility.put_vol(
             ask_put, equity_price, option_put_strike, 16 / 365, 24 / 365, 0.04, 0.20
         )
-        if not ok:
-            ask_vol_put = "NaN"
-        ret[option_put_strike]["AskVolC"] = ask_vol_put
+        ret[option_put_strike]["AskVolP"] = ask_vol_put
     save_csv(ret, f"./result/q3/{minute}.csv")
