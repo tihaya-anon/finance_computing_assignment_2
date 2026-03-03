@@ -3,6 +3,7 @@ import pandas as pd
 from collections import defaultdict
 import csv
 import os
+import matplotlib.pyplot as plt
 
 instruments = pd.read_csv("./data/instruments.csv")
 market_data = pd.read_csv("./data/marketdata.csv")
@@ -114,3 +115,24 @@ for minute in range(31, 34):
 
     save_csv(ret, f"./result/q3/{minute}.csv")
     print(f"Saved {minute}.csv")
+
+for minute in range(31, 34):
+    df = pd.read_csv(f"./result/q3/{minute}.csv")
+
+    plt.figure(figsize=(10, 6))
+    plt.plot(df["Strike"], df["BidVolC"], "b-o", label="Bid Vol Call", markersize=4)
+    plt.plot(df["Strike"], df["AskVolC"], "b--s", label="Ask Vol Call", markersize=4)
+    if "BidVolP" in df.columns:
+        plt.plot(df["Strike"], df["BidVolP"], "r-o", label="Bid Vol Put", markersize=4)
+        plt.plot(df["Strike"], df["AskVolP"], "r--s", label="Ask Vol Put", markersize=4)
+
+    plt.xlabel("Strike")
+    plt.ylabel("Implied Volatility")
+    plt.title(f"Implied Volatility at 09:{minute}:00")
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(f"./result/q3/iv_{minute}.png", dpi=150)
+    plt.close()
+    print(f"Saved iv_{minute}.png")
+
+print("All plots saved!")
